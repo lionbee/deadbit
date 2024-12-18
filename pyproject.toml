@@ -11,13 +11,13 @@ package-mode = false
 python = "^3.12"
 torch = "^2.5.1"
 diffusers = "^0.31.0"
-outlines = "^0.1.11"
 transformers = "^4.47.0"
 datasets = "^3.2.0"
 bitsandbytes = "^0.45.0"
 accelerate = "^1.2.1"
 protobuf = "^5.29.1"
 sentencepiece = "^0.2.0"
+huggingface-hub = {extras = ["cli"], version = "^0.27.0"}
 
 
 [tool.poetry.group.dev.dependencies]

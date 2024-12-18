@@ -5,28 +5,47 @@ from diffusers import (
     SD3Transformer2DModel,
     StableDiffusion3Pipeline,
 )
-from outlines import models, generate
-from pydantic import BaseModel
-from transformers import T5EncoderModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, T5EncoderModel
 
 LLM_MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
-DIFFUSION_MODEL_ID = "stabilityai/stable-diffusion-3.5-large"
+DIFFUSION_MODEL_ID = "stabilityai/stable-diffusion-3.5-medium"
+LLM_CONTEXT = "You are a script writer"
 WEB_COMIC_SCRIPT_PROMPT = """
-Write a description of less than 70 words or less for a funny picture with 4 panels.
-It is about a software developer, named deadbit, and the daily troubles he faces.
+Write 4 short descriptions for the panels of a 4 panel funny comic.
+It is about a software developer named deadbit.
+The comic always has a punchline in the last panel.
+
+Only give me the output for the 4 panels and format it as follows:
+Panel 1: [description]
+Panel 2: [description]
+Panel 3: [description]
+Panel 4: [description]
 """
 
 
-class WebComic(BaseModel):
-    title: str
-    content: str
+def write_script():
+    model = AutoModelForCausalLM.from_pretrained(
+        LLM_MODEL_ID, torch_dtype="auto", device_map="auto"
+    )
+    tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_ID)
 
+    messages = [
+        {"role": "system", "content": LLM_CONTEXT},
+        {"role": "user", "content": WEB_COMIC_SCRIPT_PROMPT},
+    ]
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-def create_web_comic_script(prompt: str) -> WebComic:
-    model = models.transformers(LLM_MODEL_ID)
-    generator = generate.json(model, WebComic)
-    result = generator(prompt)
-    return result
+    generated_ids = model.generate(**model_inputs, max_new_tokens=256)
+    generated_ids = [
+        output_ids[len(input_ids) :]
+        for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+    ]
+
+    response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return response
 
 
 def create_image_prompt(response: str) -> str:
@@ -77,10 +96,9 @@ def create_image(
 
 
 if __name__ == "__main__":
-    script = create_web_comic_script(WEB_COMIC_SCRIPT_PROMPT)
-    print(script)
+    script = write_script()
+    image_prompt = create_image_prompt(script)
     image_pipeline = create_image_pipeline()
-    image_prompt = create_image_prompt(script.content)
-    create_image(image_pipeline, image_prompt, f"webcomic-{script.title}.png")
-    with open(f"webcomic-{script.title}.txt", "w") as f:
-        f.write(script.content)
+    create_image(image_pipeline, image_prompt, f"webcomic.png")
+    with open(f"webcomic.txt", "w") as f:
+        f.write(script)
